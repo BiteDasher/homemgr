@@ -126,6 +126,10 @@ if [ "$(getent passwd $2)" ]; then
 	echo "User $2 already exists"
 	exit 4
 fi
+if [ "$(getent passwd $3)" ]; then
+	echo "User with UID $3 already exists"
+	exit 4
+fi
 	if [ "$5" ]; then U_PASSWORD="--password $5"; else U_PASSWORD=; fi
 	if [ "$4" ]; then
 		if [ ! -f $4 ]; then
