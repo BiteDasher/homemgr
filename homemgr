@@ -31,6 +31,7 @@ $(echo -e "\e[1m-e --export USER\e[0m")
   -e USER -d /myhome (--destination) | default destination is USER.tar.xz
 	exports user home directory with all files into one tar.xz archive
 $(echo -e "\e[1m-u --update USER\e[0m")
+  -u USER -p "password" (--password)
 	creates/updates configuration file inside USER home directory
 $(echo -e "\e[1m-l --list\e[0m")
 	show all home directories managed by homemgr
@@ -199,7 +200,7 @@ if [ ! -f /home/$2/.homedata ]; then
 fi
 	curdir="$(pwd)"
 	cd /home
-	if [[ "$3" == "-d" && "$4" ]]; then
+	if [[ "$3" == "-d" || "$3" == "--destination" ]] && [[ "$4" ]]; then
 		if [[ "$(echo $4 | sed "s/[-\.\ \_a-zA-Z0-9]//g" | wc -c)" == 2 || "$4" != *tar* ]]; then
 			echo "Invalid path"
 			exit 8
@@ -270,6 +271,7 @@ if [[ "$3" == "-n" || "$3" == "--no-useradd" ]]; then
 				echo "Done."
 				exit 0
 			fi
+			### How correctly can we determine the rights to files
 			if [[ "$_archive_uid" == "$_USERNAME" ]] && [[ "$_archive_gid_w" == "$_host_gid" ]]; then
 				tar --verbose --extract --same-owner --same-permissions --file $2 -C /home || {
 					echo "Error occured"
@@ -322,7 +324,7 @@ if [[ "$3" == "-n" || "$3" == "--no-useradd" ]]; then
 		else
 			if [ ! "$(getent group $H_GID_W)" ]; then groupadd $H_GID_W; fi
 			if [ ! -f $H_SHELL ]; then
-				echo "shell $4 not exists, fallin' back to /bin/sh"
+				echo "shell $H_SHELL not exists, fallin' back to /bin/sh"
 				U_SHELL="--shell /bin/sh"
 			else
 				U_SHELL="--shell $H_SHELL"
@@ -357,12 +359,14 @@ fi
 	if [ ! -f /home/$2/.homedata ]; then touch /home/$2/.homedata; fi
 	chattr -i /home/$2/.homedata
 	chmod 700 /home/$2/.homedata
+	if [[ "$3" == "-p" || "$3" == "--password" ]] && [[ "$4" ]]; then
+	temp_password="$4"; else
 	if [ -n "$(cat /home/$2/.homedata | grep -x "^H_PASSWORD=.*")" ]; then
 		eval $(
 			source /home/$2/.homedata
 			echo temp_password="$H_PASSWORD"
 		)
-	fi
+	fi; fi
 	temp_UID="$(getent passwd $2 | cut -d":" -f3)"
 	temp_GID="$(getent passwd $2 | cut -d":" -f4)"
 	temp_GID_W="$(getent group $temp_GID | cut -d":" -f1)"
@@ -377,7 +381,7 @@ H_GID_W=$temp_GID_W
 H_SHELL=$temp_SHL
 H_GROUPS="$temp_GRS"
 EOF
-	if [ "$3" ]; then echo "H_PASSWORD=\"$temp_password\"" >>/home/$2/.homedata; fi
+	if [ "$temp_password" ]; then echo "H_PASSWORD=\"$temp_password\"" >>/home/$2/.homedata; fi
 	chmod 000 /home/$2/.homedata
 	chattr +i /home/$2/.homedata
 	echo "Done."
