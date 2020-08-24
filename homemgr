@@ -1,0 +1,409 @@
+#!/bin/bash
+check_config() {
+if [ ! -f $1 ]; then echo 0; else
+	source $1
+	if [[ "$H_NAME" ]] && [[ "$H_UID" ]] && [[ "$H_GID" ]] && [[ "$H_GID_W" ]] && [[ "$H_SHELL" ]]; then
+		echo 1
+	else echo 0; fi
+fi
+}
+case $1 in
+-h|--help)
+cat <<EOF
+homemgr - Manager of home directories in Linux
+Usage: homemgr [OPTIONS...] user
+$(echo -e "\e[1m-h --help\e[0m")
+	shows this help
+$(echo -e "\e[1m-c --create USER\e[0m")
+  -c USER "password" (set up password for user to future import from archive)
+	creates home directory and configuration file of USER
+$(echo -e "\e[1m-r --remove USER\e[0m")
+	removes home directory and configuration file of USER
+$(echo -e "\e[1m-cwu --create-with-user USER uid\e[0m")
+  -cwu USER uid "/path/to/shell" "password"
+	creates user with UID uid, home directory and configuration file
+$(echo -e "\e[1m-rwu --remove-with-user USER\e[0m")
+	removes user and its home directory and configuration file
+$(echo -e "\e[1m-i --import NAME\e[0m")
+  -i NAME -n (--no-useradd) | User from configuration file will not be imported. Only home directory
+	imports (user from configuration file) and user home directory with all files to /home from tar.xz chosen archive with NAME
+$(echo -e "\e[1m-e --export USER\e[0m")
+  -e USER -d /myhome (--destination) | default destination is USER.tar.xz
+	exports user home directory with all files into one tar.xz archive
+$(echo -e "\e[1m-u --update USER\e[0m")
+	creates/updates configuration file inside USER home directory
+$(echo -e "\e[1m-l --list\e[0m")
+	show all home directories managed by homemgr
+
+$(echo -e "\e[0;31mmade by Artemii Sudakov (t.me/heveat)\e[0m")
+EOF
+	;;
+-c|--create)
+if [ $UID -ne 0 ]; then
+	echo "This script should only be executed as root"
+	exit 2
+fi
+if [ ! "$2" ]; then
+	echo "Second argument lost"
+	exit 1
+fi
+if [ ! "$(cat /etc/passwd | cut -d":" -f1 | grep -x $2)" ]; then
+	echo "User $2 not exists"
+	exit 3
+fi
+if [ -d /home/$2 ]; then
+	echo "Home directory of user $2 already exists"
+	exit 4
+fi
+	mkdir -p /home/$2
+	temp_UID="$(getent passwd $2 | cut -d":" -f3)"
+	temp_GID="$(getent passwd $2 | cut -d":" -f4)"
+	temp_GID_W="$(getent group $temp_GID | cut -d":" -f1)"
+	__GID_W="$(getent group $temp_GID | cut -d":" -f1)"
+	temp_SHL="$(getent passwd $2 | cut -d":" -f7)"
+	temp_GRS="$(groups $2 | tr "," "\n" | sed "/$__GID_W/ d" | tr "\n" "," | rev | cut -c 2- | rev)"
+	[ -d /etc/skel ] && cp -r /etc/skel/.* /home/$2/
+	chown -R ${temp_UID}:${temp_GID} /home/$2
+cat <<EOF >/home/$2/.homedata
+H_NAME=$2
+H_UID=$temp_UID
+H_GID=$temp_GID
+H_GID_W=$temp_GID_W
+H_SHELL=$temp_SHL
+H_GROUPS="$temp_GRS"
+EOF
+	if [ "$3" ]; then echo "H_PASSWORD=\"$3\"" >>/home/$2/.homedata; fi
+	chmod 000 /home/$2/.homedata
+	chattr +i /home/$2/.homedata
+	echo "Done."
+	;;
+-r|--remove)
+if [ $UID -ne 0 ]; then
+	echo "This script should only be executed as root"
+	exit 2
+fi
+if [ ! "$2" ]; then
+	echo "Second argument lost"
+	exit 1
+fi
+if [ ! -d /home/$2 ]; then
+	echo "Home directory of user $2 doesn't exists"
+	exit 4
+fi
+	chattr -i /home/$2/.homedata
+	chmod 700 /home/$2/.homedata
+	rm /home/$2/.homedata
+	rm -rf /home/$2
+	echo "Done."
+	;;
+-cwu|--create-with-user)
+if [ $UID -ne 0 ]; then
+	echo "This script should only be executed as root"
+	exit 2
+fi
+if [ ! "$2" ]; then
+	echo "Second argument lost"
+	exit 1
+fi
+if [ ! "$3" ]; then
+	echo "Third argument lost"
+	exit 1
+fi
+if [ -n "$(echo $3 | sed "s/[[:digit:]]//g")" ]; then
+	echo "Invalid UID"
+	exit 5
+fi
+if (($3 < 1000)); then
+	echo "UID is lower then 1000"
+	exit 5
+fi
+if [ -d /home/$2 ]; then
+	echo "Home directory of user $2 already exists"
+	exit 4
+fi
+if [ "$(getent passwd $2)" ]; then
+	echo "User $2 already exists"
+	exit 4
+fi
+	if [ "$5" ]; then U_PASSWORD="--password $5"; else U_PASSWORD=; fi
+	if [ "$4" ]; then
+		if [ ! -f $4 ]; then
+			echo "shell $4 not exists"
+			exit 1
+		fi
+		U_SHELL="--shell $4"
+	else U_SHELL="--shell /bin/bash"; fi
+	useradd --gid users --uid $3 --skel /etc/skel $U_SHELL $U_PASSWORD --create-home $2
+	temp_UID="$(getent passwd $2 | cut -d":" -f3)"
+	temp_GID="$(getent passwd $2 | cut -d":" -f4)"
+	temp_GID_W="$(getent group $temp_GID | cut -d":" -f1)"
+	__GID_W="$(getent group $temp_GID | cut -d":" -f1)"
+	temp_SHL="$(getent passwd $2 | cut -d":" -f7)"
+	temp_GRS="$(groups $2 | tr "," "\n" | sed "/$__GID_W/ d" | tr "\n" "," | rev | cut -c 2- | rev)"
+cat <<EOF >/home/$2/.homedata
+H_NAME=$2
+H_UID=$temp_UID
+H_GID=$temp_GID
+H_GID_W=$temp_GID_W
+H_SHELL=$temp_SHL
+H_GROUPS="$temp_GRS"
+EOF
+	if [ "$5" ]; then echo "H_PASSWORD=\"$5\"" >>/home/$2/.homedata; fi
+	chmod 000 /home/$2/.homedata
+	chattr +i /home/$2/.homedata
+	echo "Done."
+	;;
+-rwu|--remove-with-user)
+if [ $UID -ne 0 ]; then
+	echo "This script should only be executed as root"
+	exit 2
+fi
+if [ ! "$2" ]; then
+	echo "Second argument lost"
+	exit 1
+fi
+if [ ! "$(getent passwd $2)" ]; then
+	echo "User $2 doesn't exists"
+	exit 4
+fi
+if [ ! -d /home/$2 ]; then
+	echo "Home directory of user $2 doesn't exists"
+	exit 4
+fi
+	chattr -i /home/$2/.homedata
+	chmod 700 /home/$2/.homedata
+	rm /home/$2/.homedata
+	rm -rf /home/$2
+	userdel --force $2 || {
+		echo "Error occured"
+		exit 6
+	}
+	echo "Done."
+	;;
+-e|--export)
+if [ $UID -ne 0 ]; then
+	echo "This script should only be executed as root"
+	exit 2
+fi
+if [ ! "$2" ]; then
+	echo "Second argument lost"
+	exit 1
+fi
+if [ ! -d /home/$2 ]; then
+	echo "Home directory of user $2 doesn't exists"
+	exit 4
+fi
+if [ ! -f /home/$2/.homedata ]; then
+	echo "Home directory of user $2 is not controlled by homemgr"
+	exit 7
+fi
+	curdir="$(pwd)"
+	cd /home
+	if [[ "$3" == "-d" && "$4" ]]; then
+		if [[ "$(echo $4 | sed "s/[-\.\ \_a-zA-Z0-9]//g" | wc -c)" == 2 || "$4" != *tar* ]]; then
+			echo "Invalid path"
+			exit 8
+		fi
+		if [ "$(echo $4 | rev | cut -c 1)" == / ]; then DIR="$(echo $4 | rev | cut -c 2- | rev)/$2.tar.xz"; else DIR="$4"; fi
+		tar --same-owner --same-permissions --verbose --create --auto-compress --file $DIR $2 || {
+			echo "Error occured"
+			exit 6
+		}
+		echo "Done."
+		exit 0
+	fi
+	tar --same-owner --same-permissions --verbose --create --xz --file $curdir/$2.tar.xz $2 || {
+		echo "Error occured"
+		exit 6
+	}
+	echo "Done."
+	;;
+-i|--import)
+if [ $UID -ne 0 ]; then
+	echo "This script should only be executed as root"
+	exit 2
+fi
+if [ ! "$2" ]; then
+	echo "Second argument lost"
+	exit 1
+fi
+if [[ "$3" == "-n" || "$3" == "--no-useradd" ]]; then
+	if [ ! -f "$2" ]; then
+		echo "File $2 not found"
+		exit 9
+	fi
+		if [ ! "$(tar --list --verbose --file $2 | grep -o ".homedata")" ]; then
+			echo "Home directory of $2 is not controlled by homemgr"
+			exit 7
+		fi
+		source <(tar --to-stdout --get --file "$2" --wildcards \*/.homedata)
+		export _USERNAME="$H_NAME"
+		if [ -d /home/$_USERNAME ]; then
+			echo "Home directory of user $_USERNAME already exists"
+			exit 4
+		fi
+		if [ ! "$(getent passwd $_USERNAME)" ]; then
+			tar --verbose --extract --same-owner --same-permissions --file $2 -C /home || {
+				echo "Error occured"
+				exit 6
+			}
+			echo "Done."
+			exit 0
+		else
+			### Check is UID and GID of current user and user from archive is equal
+			_prepare="$(tar --list --verbose --file $2 | head -n 1 | cut -d" " -f 2)"
+			_archive_uid="$(echo $_prepare | cut -d"/" -f1)"
+			_archive_gid="$(echo $_prepare | cut -d"/" -f2)"
+			_archive_gid_w="$H_GID_W"
+			if [[ -n "$(echo $_archive_uid | sed "s/a-zA-Z//g")" && -n "$(echo $_archive_gid | sed "s/a-zA-Z//g")" ]]; then
+				_DO_CHOWN=1
+			else _DO_CHOWN=0; fi
+			_host_uid="$(getent passwd $_USERNAME | cut -d":" -f3)"
+			_prepare_host_gid="$(getent passwd $_USERNAME | cut -d":" -f4)"
+			_host_gid="$(getent group $_prepare_host_gid | cut -d":" -f1)"
+			if [ "$_DO_CHOWN" == 1 ]; then
+				tar --verbose --extract --same-permissions --file $2 -C /home || {
+					echo "Error occured"
+					exit 6
+				}
+				chown -R $_USERNAME:$_host_gid /home/$_USERNAME
+				echo "Done."
+				exit 0
+			fi
+			if [[ "$_archive_uid" == "$_USERNAME" ]] && [[ "$_archive_gid_w" == "$_host_gid" ]]; then
+				tar --verbose --extract --same-owner --same-permissions --file $2 -C /home || {
+					echo "Error occured"
+					exit 6
+				}
+				echo "Done."
+				exit 0
+			fi
+			tar --verbose --extract --same-owner --same-permissions --file $2 -C /home || {
+				echo "Error occured"
+				exit 6
+			}
+			chown -R :$_host_gid /home/$_USERNAME
+			echo "Done."
+			exit 0
+		fi
+	else
+		if [ ! -f "$2" ]; then
+			echo "File $2 not found"
+			exit 9
+		fi
+		if [ ! "$(tar --list --verbose --file $2 | grep ".homedata")" ]; then
+			echo "Home directory of $2 is not controlled by homemgr"
+			exit 7
+		fi
+		source <(tar --to-stdout --get --file $2 --wildcards \*/.homedata)
+		export _USERNAME="$H_NAME"
+		if [ -d /home/$_USERNAME ]; then
+			echo "Home directory of user $_USERNAME already exists"
+			exit 4
+		fi
+		if [ ! "$(getent passwd $_USERNAME)" ]; then
+			if [ "$(getent passwd $H_UID)" ]; then UID_SETUP=; else UID_SETUP="--uid $H_UID"; fi
+			if [ ! "$(getent group $_USERNAME)" ]; then
+				GID_SETUP="--user-group"
+			else GID_SETUP="--gid $_USERNAME"; fi
+			if [ ! -f $H_SHELL ]; then
+				echo "shell $4 not exists, fallin' back to /bin/sh"
+				U_SHELL="--shell /bin/sh"
+			else
+				U_SHELL="--shell $H_SHELL"
+			fi
+			useradd $GID_SETUP $UID_SETUP $U_SHELL $U_PASSWORD --home-dir /home/$_USERNAME $_USERNAME
+			tar --verbose --extract --same-owner --same-permissions --group="$H_GID_W" --file $2 -C /home || {
+				echo "Error occured"
+				exit 6
+			}
+			echo "Done."
+			exit 0
+		else
+			if [ ! "$(getent group $H_GID_W)" ]; then groupadd $H_GID_W; fi
+			if [ ! -f $H_SHELL ]; then
+				echo "shell $4 not exists, fallin' back to /bin/sh"
+				U_SHELL="--shell /bin/sh"
+			else
+				U_SHELL="--shell $H_SHELL"
+			fi
+			usermod --gid $H_GID_W $U_SHELL --uid $H_UID --home /home/$_USERNAME $_USERNAME
+			tar --verbose --extract --same-permissions --file $2 -C /home || {
+				echo "Error occured"
+				exit 6
+			}
+			echo "Done."
+			exit 0
+		fi
+	fi
+	;;
+-u|--update)
+if [ $UID -ne 0 ]; then
+	echo "This script should only be executed as root"
+	exit 2
+fi
+if [ ! "$2" ]; then
+	echo "Second argument lost"
+	exit 1
+fi
+if [ ! "$(getent passwd $2)" ]; then
+	echo "User $2 doesn't exists"
+	exit 4
+fi
+if [ ! -d /home/$2 ]; then
+	echo "Home directory of user $2 doesn't exists"
+	exit 4
+fi
+	if [ ! -f /home/$2/.homedata ]; then touch /home/$2/.homedata; fi
+	chattr -i /home/$2/.homedata
+	chmod 700 /home/$2/.homedata
+	if [ -n "$(cat /home/$2/.homedata | grep -x "^H_PASSWORD=.*")" ]; then
+		eval $(
+			source /home/$2/.homedata
+			echo temp_password="$H_PASSWORD"
+		)
+	fi
+	temp_UID="$(getent passwd $2 | cut -d":" -f3)"
+	temp_GID="$(getent passwd $2 | cut -d":" -f4)"
+	temp_GID_W="$(getent group $temp_GID | cut -d":" -f1)"
+	__GID_W="$(getent group $temp_GID | cut -d":" -f1)"
+	temp_SHL="$(getent passwd $2 | cut -d":" -f7)"
+	temp_GRS="$(groups $2 | tr "," "\n" | sed "/$__GID_W/ d" | tr "\n" "," | rev | cut -c 2- | rev)"
+cat <<EOF >/home/$2/.homedata
+H_NAME=$2
+H_UID=$temp_UID
+H_GID=$temp_GID
+H_GID_W=$temp_GID_W
+H_SHELL=$temp_SHL
+H_GROUPS="$temp_GRS"
+EOF
+	if [ "$3" ]; then echo "H_PASSWORD=\"$temp_password\"" >>/home/$2/.homedata; fi
+	chmod 000 /home/$2/.homedata
+	chattr +i /home/$2/.homedata
+	echo "Done."
+	;;
+-l|--list)
+if [ $UID -ne 0 ]; then
+	echo "This script should only be executed as root"
+	exit 2
+fi
+if [ ! -d /home ]; then
+	echo "error: home directory doesn't exists"
+	exit 10
+fi
+if [ -z "$(ls /home)" ]; then
+	echo "error: home directory is empty"
+	exit 10
+fi
+	for homedir in $(ls /home | cat); do
+		if [ "$(check_config "/home/$homedir/.homedata")" == 1 ]; then
+			managed+=("$homedir")
+		else true; fi
+	done
+	echo "${managed[@]}" | tr " " "\n"
+	;;
+*)
+	echo "Unknown argument"
+	exit 1
+	;;
+esac
