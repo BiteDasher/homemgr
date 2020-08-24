@@ -1,6 +1,9 @@
 # homemgr
  Manager of home directories in Linux. 
 
+## Screenshot:
+![Image of Screenshot_5](http://beeimg.com/images/h70212054903.png)
+
 ## How-to use:
 
 **homemgr -h**
