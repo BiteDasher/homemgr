@@ -1,6 +1,10 @@
 # homemgr
  Manager of home directories in Linux. 
 
+## How-to use:
+
+**homemgr -h**
+
 # Exit codes:
 1 - invalid argument(s) \
 2 - scipt executed not as root \
