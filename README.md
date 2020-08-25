@@ -14,7 +14,7 @@
 3 - user not exists \
 4 - something wrong with home directory of user \
 5 - UID is lower than 1000 \
-6 - unknown error \
+6 - useradd / usermod / userdel / groupadd / tar error \
 7 - home directory is not contolled by homemgr \
 8 - Invalid path \
 9 - something not found \
