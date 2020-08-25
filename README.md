@@ -18,4 +18,5 @@
 7 - home directory is not contolled by homemgr \
 8 - Invalid path \
 9 - something not found \
-10 - home directory doesn't exists
+10 - home directory doesn't exists \
+11 - configuration file of user is broken

@@ -206,6 +206,10 @@ if [ ! -f /home/$2/.homedata ]; then
 	echo "Home directory of user $2 is not controlled by homemgr"
 	exit 7
 fi
+if [ "$(check_config /home/$2/.homedata)" == 0 ]; then
+	echo -e "Configuration file of user $2 is broken. Update it using \e[1;33mhomemgr -u $2\e[0m for repair."
+	exit 11
+fi
 	curdir="$(pwd)"
 	cd /home
 	if [[ "$3" == "-d" || "$3" == "--destination" ]] && [[ "$4" ]]; then
