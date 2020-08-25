@@ -60,9 +60,8 @@ fi
 	temp_UID="$(getent passwd $2 | cut -d":" -f3)"
 	temp_GID="$(getent passwd $2 | cut -d":" -f4)"
 	temp_GID_W="$(getent group $temp_GID | cut -d":" -f1)"
-	__GID_W="$(getent group $temp_GID | cut -d":" -f1)"
 	temp_SHL="$(getent passwd $2 | cut -d":" -f7)"
-	temp_GRS="$(groups $2 | tr "," "\n" | sed "/$__GID_W/ d" | tr "\n" "," | rev | cut -c 2- | rev)"
+	temp_GRS="$(groups $2 | tr "," "\n" | sed "/$temp_GID_W/ d" | tr "\n" "," | rev | cut -c 2- | rev)"
 	[ -d /etc/skel ] && cp -r /etc/skel/.* /home/$2/
 	chown -R ${temp_UID}:${temp_GID} /home/$2
 cat <<EOF >/home/$2/.homedata
@@ -138,13 +137,18 @@ fi
 		fi
 		U_SHELL="--shell $4"
 	else U_SHELL="--shell /bin/bash"; fi
-	useradd --gid users --uid $3 --skel /etc/skel $U_SHELL $U_PASSWORD --create-home $2
-	temp_UID="$(getent passwd $2 | cut -d":" -f3)"
+	if [ ! "$(getent group $2)" ]; then
+		GID_SETUP="--user-group"
+	else GID_SETUP="--gid $2"; fi
+	if [ -d /etc/skel ]; then
+	SKEL_SETUP="--skel /etc/skel"
+	else SKEL_SETUP=; fi
+	useradd $GID_SETUP --uid $3 $SKEL_SETUP $U_SHELL $U_PASSWORD --create-home $2
+	temp_UID="$3"
 	temp_GID="$(getent passwd $2 | cut -d":" -f4)"
-	temp_GID_W="$(getent group $temp_GID | cut -d":" -f1)"
-	__GID_W="$(getent group $temp_GID | cut -d":" -f1)"
+	temp_GID_W="$2"
 	temp_SHL="$(getent passwd $2 | cut -d":" -f7)"
-	temp_GRS="$(groups $2 | tr "," "\n" | sed "/$__GID_W/ d" | tr "\n" "," | rev | cut -c 2- | rev)"
+	temp_GRS="$(groups $2 | tr "," "\n" | sed "/$temp_GID_W/ d" | tr "\n" "," | rev | cut -c 2- | rev)"
 cat <<EOF >/home/$2/.homedata
 H_NAME=$2
 H_UID=$temp_UID
@@ -374,9 +378,8 @@ fi
 	temp_UID="$(getent passwd $2 | cut -d":" -f3)"
 	temp_GID="$(getent passwd $2 | cut -d":" -f4)"
 	temp_GID_W="$(getent group $temp_GID | cut -d":" -f1)"
-	__GID_W="$(getent group $temp_GID | cut -d":" -f1)"
 	temp_SHL="$(getent passwd $2 | cut -d":" -f7)"
-	temp_GRS="$(groups $2 | tr "," "\n" | sed "/$__GID_W/ d" | tr "\n" "," | rev | cut -c 2- | rev)"
+	temp_GRS="$(groups $2 | tr "," "\n" | sed "/$temp_GID_W/ d" | tr "\n" "," | rev | cut -c 2- | rev)"
 cat <<EOF >/home/$2/.homedata
 H_NAME=$2
 H_UID=$temp_UID
