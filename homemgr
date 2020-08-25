@@ -313,9 +313,11 @@ if [[ "$3" == "-n" || "$3" == "--no-useradd" ]]; then
 		fi
 		if [ ! "$(getent passwd $_USERNAME)" ]; then
 			if [ "$(getent passwd $H_UID)" ]; then UID_SETUP=; else UID_SETUP="--uid $H_UID"; fi
-			if [ ! "$(getent group $_USERNAME)" ]; then
-				GID_SETUP="--user-group"
-			else GID_SETUP="--gid $_USERNAME"; fi
+		if [ ! "$(getent group $H_GID_W)" ]; then
+			# make the rights to files as close as possible to the ones you need
+			if [ "$(getent group $H_GID)" ]; then
+			GID_SETUP="--user-group"; else groupadd --gid $H_GID $H_GID_W || { echo "Error occured" ; exit 6 ; }; GID_SETUP="--gid $H_GID_W"; fi
+		else GID_SETUP="--gid $H_GID_W"; fi
 			if [ ! -f $H_SHELL ]; then
 				echo "shell $4 not exists, fallin' back to /bin/sh"
 				U_SHELL="--shell /bin/sh"
@@ -330,7 +332,10 @@ if [[ "$3" == "-n" || "$3" == "--no-useradd" ]]; then
 			echo "Done."
 			exit 0
 		else
-			if [ ! "$(getent group $H_GID_W)" ]; then groupadd $H_GID_W; fi
+			if [ ! "$(getent group $H_GID_W)" ]; then
+				if [ "$(getent group $H_GID)" ]; then
+				GID_SETUP="--user-group"; else groupadd --gid $H_GID $H_GID_W || { echo "Error occered" ; exit 6 ; }; GID_SETUP="--gid $H_GID_W"; fi
+			else GID_SETUP="--gid $H_GID_W"; fi
 			if [ ! -f $H_SHELL ]; then
 				echo "shell $H_SHELL not exists, fallin' back to /bin/sh"
 				U_SHELL="--shell /bin/sh"
