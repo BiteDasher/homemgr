@@ -7,6 +7,23 @@ if [ ! -f $1 ]; then echo 0; else
 	else echo 0; fi
 fi
 }
+import_groups() {
+if [ -n "$H_GROUPS" ]; then
+	for group in $(echo "$H_GROUPS" | tr "," " "); do
+		if [ ! "$(getent group $group)" ]; then
+		groupadd $group || {
+		echo "Error occured while creating $group group"
+		unsuccess+=("$group")
+		continue
+		}
+		fi
+	done
+if [ "$unsuccess" ]; then
+H_GROUPS="$(echo "$H_GROUPS" | tr "," "\n" | sed "/[$(echo ${unsuccess[@]} | tr " " ",")]/ d" | tr "\n" "," | rev | cut -c 2- | rev)"
+fi
+usermod --groups "$H_GROUPS" $_USERNAME
+else true; fi
+}
 case $1 in
 -h|--help)
 cat <<EOF
@@ -61,10 +78,10 @@ fi
 	temp_GID="$(getent passwd $2 | cut -d":" -f4)"
 	temp_GID_W="$(getent group $temp_GID | cut -d":" -f1)"
 	temp_SHL="$(getent passwd $2 | cut -d":" -f7)"
-	temp_GRS="$(groups $2 | tr "," "\n" | sed "/$temp_GID_W/ d" | tr "\n" "," | rev | cut -c 2- | rev)"
+	temp_GRS="$(groups $2 | tr " " "\n" | sed "/$temp_GID_W/ d" | tr "\n" "," | rev | cut -c 2- | rev)"
 	[ -d /etc/skel ] && cp -r /etc/skel/.* /home/$2/
 	chown -R ${temp_UID}:${temp_GID} /home/$2
-cat <<EOF >/home/$2/.homedata
+cat <<EOF > /home/$2/.homedata
 H_NAME=$2
 H_UID=$temp_UID
 H_GID=$temp_GID
@@ -72,7 +89,7 @@ H_GID_W=$temp_GID_W
 H_SHELL=$temp_SHL
 H_GROUPS="$temp_GRS"
 EOF
-	if [ "$3" ]; then echo "H_PASSWORD=\"$3\"" >>/home/$2/.homedata; fi
+	if [ "$3" ]; then echo "H_PASSWORD=\"$3\"" >> /home/$2/.homedata; fi
 	chmod 000 /home/$2/.homedata
 	chattr +i /home/$2/.homedata
 	echo "Done."
@@ -148,7 +165,7 @@ fi
 	temp_GID="$(getent passwd $2 | cut -d":" -f4)"
 	temp_GID_W="$2"
 	temp_SHL="$(getent passwd $2 | cut -d":" -f7)"
-	temp_GRS="$(groups $2 | tr "," "\n" | sed "/$temp_GID_W/ d" | tr "\n" "," | rev | cut -c 2- | rev)"
+	temp_GRS="$(groups $2 | tr " " "\n" | sed "/$temp_GID_W/ d" | tr "\n" "," | rev | cut -c 2- | rev)"
 cat <<EOF >/home/$2/.homedata
 H_NAME=$2
 H_UID=$temp_UID
@@ -240,11 +257,11 @@ if [ ! "$2" ]; then
 	echo "Second argument lost"
 	exit 1
 fi
+if [ ! -f "$2" ]; then
+	echo "File $2 not found"
+	exit 9
+fi
 if [[ "$3" == "-n" || "$3" == "--no-useradd" ]]; then
-	if [ ! -f "$2" ]; then
-		echo "File $2 not found"
-		exit 9
-	fi
 		if [ ! "$(tar --list --verbose --file $2 | grep -o ".homedata")" ]; then
 			echo "Home directory of $2 is not controlled by homemgr"
 			exit 7
@@ -301,10 +318,6 @@ if [[ "$3" == "-n" || "$3" == "--no-useradd" ]]; then
 			exit 0
 		fi
 	else
-		if [ ! -f "$2" ]; then
-			echo "File $2 not found"
-			exit 9
-		fi
 		if [ ! "$(tar --list --verbose --file $2 | grep ".homedata")" ]; then
 			echo "Home directory of $2 is not controlled by homemgr"
 			exit 7
@@ -333,6 +346,7 @@ if [[ "$3" == "-n" || "$3" == "--no-useradd" ]]; then
 				echo "Error occured"
 				exit 6
 			}
+			import_groups
 			echo "Done."
 			exit 0
 		else
@@ -352,6 +366,7 @@ if [[ "$3" == "-n" || "$3" == "--no-useradd" ]]; then
 				echo "Error occured"
 				exit 6
 			}
+			import_groups
 			echo "Done."
 			exit 0
 		fi
@@ -389,8 +404,8 @@ fi
 	temp_GID="$(getent passwd $2 | cut -d":" -f4)"
 	temp_GID_W="$(getent group $temp_GID | cut -d":" -f1)"
 	temp_SHL="$(getent passwd $2 | cut -d":" -f7)"
-	temp_GRS="$(groups $2 | tr "," "\n" | sed "/$temp_GID_W/ d" | tr "\n" "," | rev | cut -c 2- | rev)"
-cat <<EOF >/home/$2/.homedata
+	temp_GRS="$(groups $2 | tr " " "\n" | sed "/$temp_GID_W/ d" | tr "\n" "," | rev | cut -c 2- | rev)"
+cat <<EOF > /home/$2/.homedata
 H_NAME=$2
 H_UID=$temp_UID
 H_GID=$temp_GID
@@ -398,7 +413,7 @@ H_GID_W=$temp_GID_W
 H_SHELL=$temp_SHL
 H_GROUPS="$temp_GRS"
 EOF
-	if [ "$temp_password" ]; then echo "H_PASSWORD=\"$temp_password\"" >>/home/$2/.homedata; fi
+	if [ "$temp_password" ]; then echo "H_PASSWORD=\"$temp_password\"" >> /home/$2/.homedata; fi
 	chmod 000 /home/$2/.homedata
 	chattr +i /home/$2/.homedata
 	echo "Done."
