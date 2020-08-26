@@ -256,7 +256,7 @@ if [[ "$3" == "-n" || "$3" == "--no-useradd" ]]; then
 			exit 4
 		fi
 		if [ ! "$(getent passwd $_USERNAME)" ]; then
-			tar --verbose --extract --same-owner --same-permissions --file $2 -C /home || {
+			tar --verbose --extract --same-owner --same-permissions --file $2 --directory=/home || {
 				echo "Error occured"
 				exit 6
 			}
@@ -275,7 +275,7 @@ if [[ "$3" == "-n" || "$3" == "--no-useradd" ]]; then
 			_prepare_host_gid="$(getent passwd $_USERNAME | cut -d":" -f4)"
 			_host_gid="$(getent group $_prepare_host_gid | cut -d":" -f1)"
 			if [ "$_DO_CHOWN" == 1 ]; then
-				tar --verbose --extract --same-permissions --file $2 -C /home || {
+				tar --verbose --extract --same-permissions --file $2 --directory=/home || {
 					echo "Error occured"
 					exit 6
 				}
@@ -285,14 +285,14 @@ if [[ "$3" == "-n" || "$3" == "--no-useradd" ]]; then
 			fi
 			### How correctly can we determine the rights to files
 			if [[ "$_archive_uid" == "$_USERNAME" ]] && [[ "$_archive_gid_w" == "$_host_gid" ]]; then
-				tar --verbose --extract --same-owner --same-permissions --file $2 -C /home || {
+				tar --verbose --extract --same-owner --same-permissions --file $2 --directory=/home || {
 					echo "Error occured"
 					exit 6
 				}
 				echo "Done."
 				exit 0
 			fi
-			tar --verbose --extract --same-owner --same-permissions --file $2 -C /home || {
+			tar --verbose --extract --same-owner --same-permissions --file $2 --directory=/home || {
 				echo "Error occured"
 				exit 6
 			}
@@ -329,13 +329,14 @@ if [[ "$3" == "-n" || "$3" == "--no-useradd" ]]; then
 				U_SHELL="--shell $H_SHELL"
 			fi
 			useradd $GID_SETUP $UID_SETUP $U_SHELL $U_PASSWORD --home-dir /home/$_USERNAME $_USERNAME
-			tar --verbose --extract --same-owner --same-permissions --group="$H_GID_W" --file $2 -C /home || {
+			tar --verbose --extract --same-owner --same-permissions --group="$H_GID_W" --file $2 --directory=/home || {
 				echo "Error occured"
 				exit 6
 			}
 			echo "Done."
 			exit 0
 		else
+			if [ "$(getent passwd $H_UID)" ]; then UID_SETUP=; else UID_SETUP="--uid $H_UID"; fi
 			if [ ! "$(getent group $H_GID_W)" ]; then
 				if [ "$(getent group $H_GID)" ]; then
 				GID_SETUP="--user-group"; else groupadd --gid $H_GID $H_GID_W || { echo "Error occered" ; exit 6 ; }; GID_SETUP="--gid $H_GID_W"; fi
@@ -346,8 +347,8 @@ if [[ "$3" == "-n" || "$3" == "--no-useradd" ]]; then
 			else
 				U_SHELL="--shell $H_SHELL"
 			fi
-			usermod --gid $H_GID_W $U_SHELL --uid $H_UID --home /home/$_USERNAME $_USERNAME
-			tar --verbose --extract --same-permissions --file $2 -C /home || {
+			usermod $GID_SETUP $U_SHELL $UID_SETUP --home /home/$_USERNAME $_USERNAME
+			tar --verbose --extract --same-permissions --file $2 --directory=/home || {
 				echo "Error occured"
 				exit 6
 			}
