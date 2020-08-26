@@ -20,3 +20,6 @@
 9 - something not found \
 10 - home directory doesn't exists \
 11 - configuration file of user is broken
+
+# AUR git clone link:
+https://aur.archlinux.org/homemgr.git
