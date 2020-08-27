@@ -42,12 +42,14 @@ $(echo -e "\e[1m-cwu --create-with-user USER uid\e[0m")
 $(echo -e "\e[1m-rwu --remove-with-user USER\e[0m")
 	removes user and its home directory and configuration file
 $(echo -e "\e[1m-i --import NAME\e[0m")
-  -i NAME -n (--no-useradd) | User from configuration file will not be imported. Only home directory
+  -i NAME -n (--no-useradd) | User from configuration file will not be imported/created. Only home directory
+  -i NAME -np (--no-password) | User password with not be imported/created
 	imports (user from configuration file) and user home directory with all files to /home from tar.xz chosen archive with NAME
 $(echo -e "\e[1m-e --export USER\e[0m")
   -e USER -d /myhome (--destination) | default destination is USER.tar.xz
 	exports user home directory with all files into one tar.xz archive
 $(echo -e "\e[1m-u --update USER\e[0m")
+  -u USER -p "password" (--password)
 	creates/updates configuration file inside USER home directory
 $(echo -e "\e[1m-l --list\e[0m")
 	show all home directories managed by homemgr
@@ -88,7 +90,7 @@ H_GID_W=$temp_GID_W
 H_SHELL=$temp_SHL
 H_GROUPS="$temp_GRS"
 EOF
-	if [ "$(getent shadow $2 | cut -d":" -f2)" != "!!" ]; then echo "H_PASSWORD='$(getent shadow $2 | cut -d":" -f2)'" >> /home/$2/.homedata; fi
+	if [ ! "$(getent shadow $2 | cut -d":" -f2 | grep -o '^!')" ]; then echo "H_PASSWORD='$(getent shadow $2 | cut -d":" -f2)'" >> /home/$2/.homedata; fi
 	chmod 000 /home/$2/.homedata
 	chattr +i /home/$2/.homedata
 	echo "Done."
@@ -343,8 +345,11 @@ if [[ "$3" == "-n" || "$3" == "--no-useradd" ]]; then
 			else
 				U_SHELL="--shell $H_SHELL"
 			fi
-			if [ -n "$H_PASSWORD" ]; then U_PASSWORD="--password"; else U_PASSWORD=; H_PASSWORD=; fi
-			useradd $GID_SETUP $UID_SETUP $U_SHELL $U_PASSWORD "$H_PASSWORD" --home-dir /home/$_USERNAME $_USERNAME
+			### Password checks
+			if [[ "$3" == "-np" ]] || [[ "$3" == "--no-password" ]]; then
+			U_PASSWORD=; H_PASSWORD=; else
+			if [ -n "$H_PASSWORD" ]; then U_PASSWORD="--password"; else U_PASSWORD=; H_PASSWORD=; fi; fi
+			useradd $GID_SETUP $UID_SETUP $U_SHELL $U_PASSWORD $H_PASSWORD --home-dir /home/$_USERNAME $_USERNAME
 			tar --verbose --extract --same-owner --same-permissions --group="$H_GID_W" --file $2 --directory=/home || {
 				echo "Error occured"
 				exit 6
@@ -364,8 +369,11 @@ if [[ "$3" == "-n" || "$3" == "--no-useradd" ]]; then
 			else
 				U_SHELL="--shell $H_SHELL"
 			fi
-			if [ -n "$H_PASSWORD" ]; then U_PASSWORD="--password"; else U_PASSWORD=; H_PASSWORD=; fi
-			usermod $GID_SETUP $U_SHELL $UID_SETUP $U_PASSWORD "$H_PASSWORD" --home /home/$_USERNAME $_USERNAME
+			### Same things with password
+			if [[ "$3" == "-np" ]] || [[ "$3" == "--no-password" ]]; then
+			U_PASSWORD=; H_PASSWORD=; else
+			if [ -n "$H_PASSWORD" ]; then U_PASSWORD="--password"; else U_PASSWORD=; H_PASSWORD=; fi; fi
+			usermod $GID_SETUP $U_SHELL $UID_SETUP $U_PASSWORD $H_PASSWORD --home /home/$_USERNAME $_USERNAME
 			tar --verbose --extract --same-permissions --file $2 --directory=/home || {
 				echo "Error occured"
 				exit 6
@@ -410,7 +418,11 @@ H_GID_W=$temp_GID_W
 H_SHELL=$temp_SHL
 H_GROUPS="$temp_GRS"
 EOF
-	if [ "$(getent shadow $2 | cut -d":" -f2)" != "!!" ]; then echo "H_PASSWORD='$(getent shadow $2 | cut -d":" -f2)'" >> /home/$2/.homedata; fi
+	if [[ "$3" == "-p" || "$3" == "--password" ]] && [[ "$4" ]]; then
+	echo "$2:$4" | chpasswd --crypt-method SHA512
+	if [ "$?" != 0 ]; then
+	echo "Error occured while changing password"; fi; fi
+	if [ ! "$(getent shadow $2 | cut -d":" -f2 | grep -o '^!')" ]; then echo "H_PASSWORD='$(getent shadow $2 | cut -d":" -f2)'" >> /home/$2/.homedata; fi
 	chmod 000 /home/$2/.homedata
 	chattr +i /home/$2/.homedata
 	echo "Done."
