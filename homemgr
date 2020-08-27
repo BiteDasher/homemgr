@@ -24,6 +24,20 @@ fi
 usermod --groups "$H_GROUPS" $_USERNAME
 else true; fi
 }
+### Build-in implementaion of getent (in case you doesn't have it)
+if [ ! "$(command -v getent)" ]; then
+getent() {
+if [ ! "$1" ]; then echo "error"; return 1; fi
+#case "$1" in passwd) true ;; shadow) true ;; group) true ;; *) echo "error"; return 1 ;; esac
+case "$1" in
+passwd)
+grep -Eo "^${2}:.*" /etc/passwd && return 0 || grep -Eo ".*:.*:${2}:.*:.*:.*:.*" /etc/passwd && return 0 || return 1 ;;
+shadow)
+grep -Eo "^${2}:.*:.*:.*:.*:.*:.*:.*:.*" /etc/shadow && return 0 || return 1 ;;
+group)
+grep -Eo "^${2}:.*:.*:.*" /etc/group && return 0 || grep -Eo ".*:.*:${2}:.*" /etc/group && return 0 || return 1 ;;
+*) echo "error"; return 1 ;; esac
+}; fi
 case $1 in
 -h|--help)
 cat <<EOF

@@ -8,6 +8,15 @@
 
 **homemgr -h**
 
+# Dependencies:
+```bash``` - of course \
+```coreutils``` - basic commands \
+```libc``` - getent command **(optional, for native getent command)** \
+```sed``` - parsing \
+```shadow``` - add/modify/remove groups/users for import \
+```tar``` - archiving home directory \
+```e2fsprogs``` - chattr command
+
 # Exit codes:
 1 - invalid argument(s) \
 2 - scipt executed not as root \
