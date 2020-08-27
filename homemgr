@@ -174,7 +174,7 @@ H_SHELL=$temp_SHL
 H_GROUPS="$temp_GRS"
 EOF
 	if [ "$5" ]; then echo "H_PASSWORD=\"$5\"" >>/home/$2/.homedata
-	echo "$2:$5" | chpasswd -c SHA512 || echo "Error occured while changing password"; fi
+	echo "$2:$5" | chpasswd --crypt-method SHA512 || echo "Error occured while changing password"; fi
 	chmod 000 /home/$2/.homedata
 	chattr +i /home/$2/.homedata
 	echo "Done."
@@ -346,7 +346,7 @@ if [[ "$3" == "-n" || "$3" == "--no-useradd" ]]; then
 				echo "Error occured"
 				exit 6
 			}
-			if [ -n "$H_PASSWORD" ]; then echo "$_USERNAME:$H_PASSWORD" | chpasswd -c SHA512 || echo "Error occured while changing password"; fi
+			if [ -n "$H_PASSWORD" ]; then echo "$_USERNAME:$H_PASSWORD" | chpasswd --crypt-method SHA512 || echo "Error occured while changing password"; fi
 			import_groups
 			echo "Done."
 			exit 0
@@ -367,7 +367,7 @@ if [[ "$3" == "-n" || "$3" == "--no-useradd" ]]; then
 				echo "Error occured"
 				exit 6
 			}
-			if [ -n "$H_PASSWORD" ]; then echo "$_USERNAME:$H_PASSWORD" | chpasswd -c SHA512 || echo "Error occured while changing password"; fi
+			if [ -n "$H_PASSWORD" ]; then echo "$_USERNAME:$H_PASSWORD" | chpasswd --crypt-method SHA512 || echo "Error occured while changing password"; fi
 			import_groups
 			echo "Done."
 			exit 0
