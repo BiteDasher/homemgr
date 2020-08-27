@@ -174,7 +174,7 @@ H_SHELL=$temp_SHL
 H_GROUPS="$temp_GRS"
 EOF
 	if [ "$5" ]; then echo "H_PASSWORD=\"$5\"" >>/home/$2/.homedata
-	echo "$2:$5" | chpasswd -c SHA512; fi
+	echo "$2:$5" | chpasswd -c SHA512 || echo "Error occured while changing password"; fi
 	chmod 000 /home/$2/.homedata
 	chattr +i /home/$2/.homedata
 	echo "Done."
