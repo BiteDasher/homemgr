@@ -23,3 +23,6 @@
 
 # AUR git clone link:
 https://aur.archlinux.org/homemgr.git
+
+### If you are upgrading from version <=1.2 to 1.3
+Do not forget to do ```homemgr -u USERNAME``` after the upgrade
