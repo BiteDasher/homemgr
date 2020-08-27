@@ -32,12 +32,12 @@ Usage: homemgr [OPTIONS...] user
 $(echo -e "\e[1m-h --help\e[0m")
 	shows this help
 $(echo -e "\e[1m-c --create USER\e[0m")
-  -c USER "password" (set up password for user to future import from archive)
+  -c USER
 	creates home directory and configuration file of USER
 $(echo -e "\e[1m-r --remove USER\e[0m")
 	removes home directory and configuration file of USER
 $(echo -e "\e[1m-cwu --create-with-user USER uid\e[0m")
-  -cwu USER uid "/path/to/shell" "password"
+  -cwu USER uid "/path/to/shell" 'password'
 	creates user with UID uid, home directory and configuration file
 $(echo -e "\e[1m-rwu --remove-with-user USER\e[0m")
 	removes user and its home directory and configuration file
@@ -48,7 +48,6 @@ $(echo -e "\e[1m-e --export USER\e[0m")
   -e USER -d /myhome (--destination) | default destination is USER.tar.xz
 	exports user home directory with all files into one tar.xz archive
 $(echo -e "\e[1m-u --update USER\e[0m")
-  -u USER -p "password" (--password)
 	creates/updates configuration file inside USER home directory
 $(echo -e "\e[1m-l --list\e[0m")
 	show all home directories managed by homemgr
@@ -89,7 +88,7 @@ H_GID_W=$temp_GID_W
 H_SHELL=$temp_SHL
 H_GROUPS="$temp_GRS"
 EOF
-	if [ "$3" ]; then echo "H_PASSWORD=\"$3\"" >> /home/$2/.homedata; fi
+	if [ "$(getent shadow $2 | cut -d":" -f2)" != "!!" ]; then echo "H_PASSWORD='$(getent shadow $2 | cut -d":" -f2)'" >> /home/$2/.homedata; fi
 	chmod 000 /home/$2/.homedata
 	chattr +i /home/$2/.homedata
 	echo "Done."
@@ -165,7 +164,7 @@ fi
 	temp_GID_W="$2"
 	temp_SHL="$(getent passwd $2 | cut -d":" -f7)"
 	temp_GRS="$(groups $2 | tr " " "\n" | sed "/$temp_GID_W/ d" | tr "\n" "," | rev | cut -c 2- | rev)"
-cat <<EOF >/home/$2/.homedata
+cat <<EOF > /home/$2/.homedata
 H_NAME=$2
 H_UID=$temp_UID
 H_GID=$temp_GID
@@ -173,8 +172,11 @@ H_GID_W=$temp_GID_W
 H_SHELL=$temp_SHL
 H_GROUPS="$temp_GRS"
 EOF
-	if [ "$5" ]; then echo "H_PASSWORD=\"$5\"" >>/home/$2/.homedata
-	echo "$2:$5" | chpasswd --crypt-method SHA512 || echo "Error occured while changing password"; fi
+	if [ "$5" ]; then
+	echo "$2:$5" | chpasswd --crypt-method SHA512
+	if [ "$?" == 0 ]; then
+	echo "H_PASSWORD='$(getent shadow $2 | cut -d":" -f2)'" >> /home/$2/.homedata; else
+	echo "Error occured while changing password"; fi; fi
 	chmod 000 /home/$2/.homedata
 	chattr +i /home/$2/.homedata
 	echo "Done."
@@ -341,12 +343,12 @@ if [[ "$3" == "-n" || "$3" == "--no-useradd" ]]; then
 			else
 				U_SHELL="--shell $H_SHELL"
 			fi
-			useradd $GID_SETUP $UID_SETUP $U_SHELL --home-dir /home/$_USERNAME $_USERNAME
+			if [ -n "$H_PASSWORD" ]; then U_PASSWORD="--password"; else U_PASSWORD=; H_PASSWORD=; fi
+			useradd $GID_SETUP $UID_SETUP $U_SHELL $U_PASSWORD "$H_PASSWORD" --home-dir /home/$_USERNAME $_USERNAME
 			tar --verbose --extract --same-owner --same-permissions --group="$H_GID_W" --file $2 --directory=/home || {
 				echo "Error occured"
 				exit 6
 			}
-			if [ -n "$H_PASSWORD" ]; then echo "$_USERNAME:$H_PASSWORD" | chpasswd --crypt-method SHA512 || echo "Error occured while changing password"; fi
 			import_groups
 			echo "Done."
 			exit 0
@@ -362,12 +364,13 @@ if [[ "$3" == "-n" || "$3" == "--no-useradd" ]]; then
 			else
 				U_SHELL="--shell $H_SHELL"
 			fi
-			usermod $GID_SETUP $U_SHELL $UID_SETUP --home /home/$_USERNAME $_USERNAME
+			if [ -n "$H_PASSWORD" ]; then U_PASSWORD="--password"; else U_PASSWORD=; H_PASSWORD=; fi
+			usermod $GID_SETUP $U_SHELL $UID_SETUP $U_PASSWORD "$H_PASSWORD" --home /home/$_USERNAME $_USERNAME
 			tar --verbose --extract --same-permissions --file $2 --directory=/home || {
 				echo "Error occured"
 				exit 6
 			}
-			if [ -n "$H_PASSWORD" ]; then echo "$_USERNAME:$H_PASSWORD" | chpasswd --crypt-method SHA512 || echo "Error occured while changing password"; fi
+			if [ -n "$H_PASSWORD" ]; then echo "Password for $_USERNAME has been changed"; fi
 			import_groups
 			echo "Done."
 			exit 0
@@ -394,14 +397,6 @@ fi
 	if [ ! -f /home/$2/.homedata ]; then touch /home/$2/.homedata; fi
 	chattr -i /home/$2/.homedata
 	chmod 700 /home/$2/.homedata
-	if [[ "$3" == "-p" || "$3" == "--password" ]] && [[ "$4" ]]; then
-	temp_password="$4"; else
-	if [ -n "$(cat /home/$2/.homedata | grep -x "^H_PASSWORD=.*")" ]; then
-		eval $(
-			source /home/$2/.homedata
-			echo temp_password="$H_PASSWORD"
-		)
-	fi; fi
 	temp_UID="$(getent passwd $2 | cut -d":" -f3)"
 	temp_GID="$(getent passwd $2 | cut -d":" -f4)"
 	temp_GID_W="$(getent group $temp_GID | cut -d":" -f1)"
@@ -415,7 +410,7 @@ H_GID_W=$temp_GID_W
 H_SHELL=$temp_SHL
 H_GROUPS="$temp_GRS"
 EOF
-	if [ "$temp_password" ]; then echo "H_PASSWORD=\"$temp_password\"" >> /home/$2/.homedata; fi
+	if [ "$(getent shadow $2 | cut -d":" -f2)" != "!!" ]; then echo "H_PASSWORD='$(getent shadow $2 | cut -d":" -f2)'" >> /home/$2/.homedata; fi
 	chmod 000 /home/$2/.homedata
 	chattr +i /home/$2/.homedata
 	echo "Done."
