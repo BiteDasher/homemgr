@@ -38,6 +38,43 @@ group)
 grep -Eo "^${2}:.*:.*:.*" /etc/group && return 0 || grep -Eo ".*:.*:${2}:.*" /etc/group && return 0 || return 1 ;;
 *) echo "error"; return 1 ;; esac
 }; fi
+update_config() {
+if [[ "$CONF_NOT_EXISTS" == 1 ]]; then true; else
+chattr -i /home/$_USERNAME/.homedata
+chmod 700 /home/$_USERNAME/.homedata
+fi
+temp_UID="$(getent passwd $_USERNAME | cut -d":" -f3)"
+temp_GID="$(getent passwd $_USERNAME | cut -d":" -f4)"
+temp_GID_W="$(getent group $temp_GID | cut -d":" -f1)"
+temp_SHL="$(getent passwd $_USERNAME | cut -d":" -f7)"
+temp_GRS="$(groups $_USERNAME | tr " " "\n" | sed "/$temp_GID_W/ d" | tr "\n" "," | rev | cut -c 2- | rev)"
+if [ "$DO_SETUP" == 1 ]; then
+if [ -d /etc/skel ]; then cp -r /etc/skel/. /home/$_USERNAME/; fi
+chown -R ${temp_UID}:${temp_GID} /home/$_USERNAME
+fi
+cat <<EOF > /home/$_USERNAME/.homedata
+H_NAME=$_USERNAME
+H_UID=$temp_UID
+H_GID=$temp_GID
+H_GID_W=$temp_GID_W
+H_SHELL=$temp_SHL
+H_GROUPS="$temp_GRS"
+EOF
+if [[ "$DO_PW_CHANGE" == 1 ]]; then
+	if [ "$PW_VAR" ]; then
+	echo "$_USERNAME:$PW_VAR" | chpasswd --crypt-method SHA512
+		if [ "$?" != 0 ]; then
+		echo "Error occured while changing password"; fi
+		if [ ! "$(getent shadow $_USERNAME | cut -d":" -f2 | grep -o '^!')" ]; then echo "H_PASSWORD='$(getent shadow $_USERNAME | cut -d":" -f2)'" >> /home/$_USERNAME/.homedata; fi
+	fi
+fi
+if [[ ! "$DO_PW_CHANGE" && "$DO_PW_UPD" == 1 ]]; then
+if [ ! "$(getent shadow $_USERNAME | cut -d":" -f2 | grep -o '^!')" ]; then echo "H_PASSWORD='$(getent shadow $_USERNAME | cut -d":" -f2)'" >> /home/$_USERNAME/.homedata; fi
+fi
+chmod 000 /home/$_USERNAME/.homedata
+chattr +i /home/$_USERNAME/.homedata
+}
+DO_PW_CHANGE=; DO_PW_UPD=; PW_VAR=; DO_SETUP=; CONF_NOT_EXISTS=
 case $1 in
 -h|--help)
 cat <<EOF
@@ -89,24 +126,7 @@ if [ -d /home/$2 ]; then
 	exit 4
 fi
 	mkdir -p /home/$2
-	temp_UID="$(getent passwd $2 | cut -d":" -f3)"
-	temp_GID="$(getent passwd $2 | cut -d":" -f4)"
-	temp_GID_W="$(getent group $temp_GID | cut -d":" -f1)"
-	temp_SHL="$(getent passwd $2 | cut -d":" -f7)"
-	temp_GRS="$(groups $2 | tr " " "\n" | sed "/$temp_GID_W/ d" | tr "\n" "," | rev | cut -c 2- | rev)"
-	[ -d /etc/skel ] && cp -r /etc/skel/.* /home/$2/
-	chown -R ${temp_UID}:${temp_GID} /home/$2
-cat <<EOF > /home/$2/.homedata
-H_NAME=$2
-H_UID=$temp_UID
-H_GID=$temp_GID
-H_GID_W=$temp_GID_W
-H_SHELL=$temp_SHL
-H_GROUPS="$temp_GRS"
-EOF
-	if [ ! "$(getent shadow $2 | cut -d":" -f2 | grep -o '^!')" ]; then echo "H_PASSWORD='$(getent shadow $2 | cut -d":" -f2)'" >> /home/$2/.homedata; fi
-	chmod 000 /home/$2/.homedata
-	chattr +i /home/$2/.homedata
+	_USERNAME=$2 CONF_NOT_EXISTS=1 DO_SETUP=1 DO_PW_UPD=1 update_config
 	echo "Done."
 	;;
 -r|--remove)
@@ -175,26 +195,8 @@ fi
 	SKEL_SETUP="--skel /etc/skel"
 	else SKEL_SETUP=; fi
 	useradd $GID_SETUP --uid $3 $SKEL_SETUP $U_SHELL --create-home $2
-	temp_UID="$3"
-	temp_GID="$(getent passwd $2 | cut -d":" -f4)"
-	temp_GID_W="$2"
-	temp_SHL="$(getent passwd $2 | cut -d":" -f7)"
-	temp_GRS="$(groups $2 | tr " " "\n" | sed "/$temp_GID_W/ d" | tr "\n" "," | rev | cut -c 2- | rev)"
-cat <<EOF > /home/$2/.homedata
-H_NAME=$2
-H_UID=$temp_UID
-H_GID=$temp_GID
-H_GID_W=$temp_GID_W
-H_SHELL=$temp_SHL
-H_GROUPS="$temp_GRS"
-EOF
-	if [ "$5" ]; then
-	echo "$2:$5" | chpasswd --crypt-method SHA512
-	if [ "$?" == 0 ]; then
-	echo "H_PASSWORD='$(getent shadow $2 | cut -d":" -f2)'" >> /home/$2/.homedata; else
-	echo "Error occured while changing password"; fi; fi
-	chmod 000 /home/$2/.homedata
-	chattr +i /home/$2/.homedata
+	if [ "$5" ]; then DO_PW_CHANGE=1; PW_VAR="$5"; fi
+	_USERNAME=$2 CONF_NOT_EXISTS=1 DO_SETUP=1 update_config
 	echo "Done."
 	;;
 -rwu|--remove-with-user)
@@ -362,17 +364,19 @@ if [[ "$3" == "-n" || "$3" == "--no-useradd" ]]; then
 			### Password checks
 			if [[ "$3" == "-np" ]] || [[ "$3" == "--no-password" ]]; then
 			U_PASSWORD=; H_PASSWORD=; else
-			if [ -n "$H_PASSWORD" ]; then U_PASSWORD="--password"; else U_PASSWORD=; H_PASSWORD=; fi; fi
+			if [ -n "$H_PASSWORD" ]; then U_PASSWORD="--password"; DO_PW_UPD=1; else U_PASSWORD=; H_PASSWORD=; fi; fi
 			useradd $GID_SETUP $UID_SETUP $U_SHELL $U_PASSWORD $H_PASSWORD --home-dir /home/$_USERNAME $_USERNAME
 			tar --verbose --extract --same-owner --same-permissions --group="$H_GID_W" --file $2 --directory=/home || {
 				echo "Error occured"
 				exit 6
 			}
 			import_groups
+			update_config
 			echo "Done."
 			exit 0
 		else
-			if [ "$(getent passwd $H_UID)" ]; then UID_SETUP=; else UID_SETUP="--uid $H_UID"; fi
+			if [ "$(getent passwd $H_UID)" ]; then 
+			UID_SETUP=; else UID_SETUP="--uid $H_UID"; fi
 			if [ ! "$(getent group $H_GID_W)" ]; then
 				if [ "$(getent group $H_GID)" ]; then
 				GID_SETUP="--user-group"; else groupadd --gid $H_GID $H_GID_W || { echo "Error occered" ; exit 6 ; }; GID_SETUP="--gid $H_GID_W"; fi
@@ -386,7 +390,7 @@ if [[ "$3" == "-n" || "$3" == "--no-useradd" ]]; then
 			### Same things with password
 			if [[ "$3" == "-np" ]] || [[ "$3" == "--no-password" ]]; then
 			U_PASSWORD=; H_PASSWORD=; else
-			if [ -n "$H_PASSWORD" ]; then U_PASSWORD="--password"; else U_PASSWORD=; H_PASSWORD=; fi; fi
+			if [ -n "$H_PASSWORD" ]; then U_PASSWORD="--password"; DO_PW_UPD=1; else U_PASSWORD=; H_PASSWORD=; fi; fi
 			usermod $GID_SETUP $U_SHELL $UID_SETUP $U_PASSWORD $H_PASSWORD --home /home/$_USERNAME $_USERNAME
 			tar --verbose --extract --same-permissions --file $2 --directory=/home || {
 				echo "Error occured"
@@ -394,6 +398,7 @@ if [[ "$3" == "-n" || "$3" == "--no-useradd" ]]; then
 			}
 			if [ -n "$H_PASSWORD" ]; then echo "Password for $_USERNAME has been changed"; fi
 			import_groups
+			update_config
 			echo "Done."
 			exit 0
 		fi
@@ -417,28 +422,9 @@ if [ ! -d /home/$2 ]; then
 	exit 4
 fi
 	if [ ! -f /home/$2/.homedata ]; then touch /home/$2/.homedata; fi
-	chattr -i /home/$2/.homedata
-	chmod 700 /home/$2/.homedata
-	temp_UID="$(getent passwd $2 | cut -d":" -f3)"
-	temp_GID="$(getent passwd $2 | cut -d":" -f4)"
-	temp_GID_W="$(getent group $temp_GID | cut -d":" -f1)"
-	temp_SHL="$(getent passwd $2 | cut -d":" -f7)"
-	temp_GRS="$(groups $2 | tr " " "\n" | sed "/$temp_GID_W/ d" | tr "\n" "," | rev | cut -c 2- | rev)"
-cat <<EOF > /home/$2/.homedata
-H_NAME=$2
-H_UID=$temp_UID
-H_GID=$temp_GID
-H_GID_W=$temp_GID_W
-H_SHELL=$temp_SHL
-H_GROUPS="$temp_GRS"
-EOF
 	if [[ "$3" == "-p" || "$3" == "--password" ]] && [[ "$4" ]]; then
-	echo "$2:$4" | chpasswd --crypt-method SHA512
-	if [ "$?" != 0 ]; then
-	echo "Error occured while changing password"; fi; fi
-	if [ ! "$(getent shadow $2 | cut -d":" -f2 | grep -o '^!')" ]; then echo "H_PASSWORD='$(getent shadow $2 | cut -d":" -f2)'" >> /home/$2/.homedata; fi
-	chmod 000 /home/$2/.homedata
-	chattr +i /home/$2/.homedata
+	DO_PW_CHANGE=1; PW_VAR="$4"; else DO_PW_UPD=1; fi
+	_USERNAME=$2 update_config
 	echo "Done."
 	;;
 -l|--list)
