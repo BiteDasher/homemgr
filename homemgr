@@ -154,7 +154,7 @@ if [ ! -d /home/$2 ]; then
 fi
 	chmod 700 /home/$2/.homedata
 	rm /home/$2/.homedata
-	rm -rf /home/$2
+	rm -r -f /home/$2
 	echo "Done."
 	;;
 -cwu|--create-with-user)
@@ -227,7 +227,7 @@ if [ ! -d /home/$2 ]; then
 fi
 	chmod 700 /home/$2/.homedata
 	rm /home/$2/.homedata
-	rm -rf /home/$2
+	rm -r -f /home/$2
 	userdel --force $2 || {
 		echo "Error occured"
 		exit 6
