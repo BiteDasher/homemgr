@@ -1,4 +1,16 @@
 #!/bin/bash
+		if [ -z $UID ]; then
+		UID="$(id -u)"; fi
+### This code will be removed soon.
+if [ "$FIX_ATTRS" == 1 ]; then
+	if [ $UID -ne 0 ]; then
+		echo "This script should only be executed as root"
+		exit 2
+	fi
+	chattr -i /home/*/.homedata 2>/dev/null
+	echo "Attributes removed successfully"
+	exit 0
+fi
 check_config() {
 if [ ! -f $1 ]; then echo 0; else
 	source $1
@@ -25,33 +37,32 @@ usermod --groups "$H_GROUPS" $_USERNAME
 else true; fi
 }
 ### Build-in implementaion of getent (in case you doesn't have it)
-if [ ! "$(command -v getent)" ]; then
+if [[ ! "$(command -v getent)" || "$build_in_getent" == 1 ]]; then
 getent() {
 if [ ! "$1" ]; then echo "error"; return 1; fi
 #case "$1" in passwd) true ;; shadow) true ;; group) true ;; *) echo "error"; return 1 ;; esac
 case "$1" in
 passwd)
-grep -Eo "^${2}:.*" /etc/passwd && return 0 || grep -Eo ".*:.*:${2}:.*:.*:.*:.*" /etc/passwd && return 0 || return 1 ;;
+grep -E -o "^${2}:.*" /etc/passwd && return 0 || grep -E -o ".*:.*:${2}:.*:.*:.*:.*" /etc/passwd && return 0 || return 1 ;;
 shadow)
-grep -Eo "^${2}:.*:.*:.*:.*:.*:.*:.*:.*" /etc/shadow && return 0 || return 1 ;;
+grep -E -o "^${2}:.*" /etc/shadow && return 0 || return 1 ;;
 group)
-grep -Eo "^${2}:.*:.*:.*" /etc/group && return 0 || grep -Eo ".*:.*:${2}:.*" /etc/group && return 0 || return 1 ;;
+grep -E -o "^${2}:.*:.*:.*" /etc/group && return 0 || grep -E -o ".*:.*:${2}:.*" /etc/group && return 0 || return 1 ;;
 *) echo "error"; return 1 ;; esac
 }; fi
 update_config() {
 if [[ "$CONF_NOT_EXISTS" == 1 ]]; then true; else
-chattr -i /home/$_USERNAME/.homedata
 chmod 700 /home/$_USERNAME/.homedata
 fi
 temp_UID="$(getent passwd $_USERNAME | cut -d":" -f3)"
 temp_GID="$(getent passwd $_USERNAME | cut -d":" -f4)"
 temp_GID_W="$(getent group $temp_GID | cut -d":" -f1)"
 temp_SHL="$(getent passwd $_USERNAME | cut -d":" -f7)"
-temp_GRS="$(groups $_USERNAME | tr " " "\n" | sed "/$temp_GID_W/ d" | tr "\n" "," | rev | cut -c 2- | rev)"
-if [ "$DO_SETUP" == 1 ]; then
-if [ -d /etc/skel ]; then cp -r /etc/skel/. /home/$_USERNAME/; fi
-chown -R ${temp_UID}:${temp_GID} /home/$_USERNAME
-fi
+temp_GRS="$(id -n -G $_USERNAME | tr " " "\n" | sed "/$temp_GID_W/ d" | tr "\n" "," | rev | cut -c 2- | rev)"
+	if [ "$DO_SETUP" == 1 ]; then
+		if [ -d /etc/skel ]; then cp -r /etc/skel/. /home/$_USERNAME/; fi
+		chown -R ${temp_UID}:${temp_GID} /home/$_USERNAME
+	fi
 cat <<EOF > /home/$_USERNAME/.homedata
 H_NAME=$_USERNAME
 H_UID=$temp_UID
@@ -65,14 +76,13 @@ if [[ "$DO_PW_CHANGE" == 1 ]]; then
 	echo "$_USERNAME:$PW_VAR" | chpasswd --crypt-method SHA512
 		if [ "$?" != 0 ]; then
 		echo "Error occured while changing password"; fi
-		if [ ! "$(getent shadow $_USERNAME | cut -d":" -f2 | grep -o '^!')" ]; then echo "H_PASSWORD='$(getent shadow $_USERNAME | cut -d":" -f2)'" >> /home/$_USERNAME/.homedata; fi
+		if [ ! "$(getent shadow $_USERNAME | cut -d ":" -f 2 | grep -o '^!')" ]; then echo "H_PASSWORD='$(getent shadow $_USERNAME | cut -d ":" -f 2)'" >> /home/$_USERNAME/.homedata; fi
 	fi
 fi
 if [[ ! "$DO_PW_CHANGE" && "$DO_PW_UPD" == 1 ]]; then
-if [ ! "$(getent shadow $_USERNAME | cut -d":" -f2 | grep -o '^!')" ]; then echo "H_PASSWORD='$(getent shadow $_USERNAME | cut -d":" -f2)'" >> /home/$_USERNAME/.homedata; fi
+	if [ ! "$(getent shadow $_USERNAME | cut -d ":" -f 2 | grep -o '^!')" ]; then echo "H_PASSWORD='$(getent shadow $_USERNAME | cut -d ":" -f 2)'" >> /home/$_USERNAME/.homedata; fi
 fi
 chmod 000 /home/$_USERNAME/.homedata
-chattr +i /home/$_USERNAME/.homedata
 }
 DO_PW_CHANGE=; DO_PW_UPD=; PW_VAR=; DO_SETUP=; CONF_NOT_EXISTS=
 case $1 in
@@ -117,7 +127,7 @@ if [ ! "$2" ]; then
 	echo "Second argument lost"
 	exit 1
 fi
-if [ ! "$(cat /etc/passwd | cut -d":" -f1 | grep -x $2)" ]; then
+if [ ! "$(cat /etc/passwd | cut -d ":" -f 1 | grep -x $2)" ]; then
 	echo "User $2 not exists"
 	exit 3
 fi
@@ -142,7 +152,6 @@ if [ ! -d /home/$2 ]; then
 	echo "Home directory of user $2 doesn't exists"
 	exit 4
 fi
-	chattr -i /home/$2/.homedata
 	chmod 700 /home/$2/.homedata
 	rm /home/$2/.homedata
 	rm -rf /home/$2
@@ -216,7 +225,6 @@ if [ ! -d /home/$2 ]; then
 	echo "Home directory of user $2 doesn't exists"
 	exit 4
 fi
-	chattr -i /home/$2/.homedata
 	chmod 700 /home/$2/.homedata
 	rm /home/$2/.homedata
 	rm -rf /home/$2
@@ -301,16 +309,16 @@ if [[ "$3" == "-n" || "$3" == "--no-useradd" ]]; then
 			exit 0
 		else
 			### Check is UID and GID of current user and user from archive is equal
-			_prepare="$(tar --list --verbose --file $2 | head -n 1 | cut -d" " -f 2)"
-			_archive_uid="$(echo $_prepare | cut -d"/" -f1)"
-			_archive_gid="$(echo $_prepare | cut -d"/" -f2)"
+			_prepare="$(tar --list --verbose --file $2 | head -n 1 | cut -d " " -f 2)"
+			_archive_uid="$(echo $_prepare | cut -d "/" -f 1)"
+			_archive_gid="$(echo $_prepare | cut -d "/" -f 2)"
 			_archive_gid_w="$H_GID_W"
 			if [[ -n "$(echo $_archive_uid | sed "s/a-zA-Z//g")" && -n "$(echo $_archive_gid | sed "s/a-zA-Z//g")" ]]; then
 				_DO_CHOWN=1
 			else _DO_CHOWN=0; fi
-			_host_uid="$(getent passwd $_USERNAME | cut -d":" -f3)"
-			_prepare_host_gid="$(getent passwd $_USERNAME | cut -d":" -f4)"
-			_host_gid="$(getent group $_prepare_host_gid | cut -d":" -f1)"
+			_host_uid="$(getent passwd $_USERNAME | cut -d ":" -f 3)"
+			_prepare_host_gid="$(getent passwd $_USERNAME | cut -d ":" -f 4)"
+			_host_gid="$(getent group $_prepare_host_gid | cut -d ":" -f 1)"
 			if [ "$_DO_CHOWN" == 1 ]; then
 				tar --verbose --extract --same-permissions --file $2 --directory=/home || {
 					echo "Error occured"

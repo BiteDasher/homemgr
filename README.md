@@ -14,8 +14,7 @@
 ```libc``` - getent command **(optional, for native getent command)** \
 ```sed``` - parsing \
 ```shadow``` - add/modify/remove groups/users for import \
-```tar``` - archiving home directory \
-```e2fsprogs``` - chattr command
+```tar``` - archiving home directory
 
 # Exit codes:
 1 - invalid argument(s) \
@@ -35,3 +34,6 @@ https://aur.archlinux.org/homemgr.git
 
 ### If you are upgrading from version <=1.3 to >=1.4
 Do not forget to do ```homemgr -u USERNAME``` after the upgrade
+
+### If you are upgrading from version <=1.6 to >=1.7
+Enter ```sudo FIX_ATTRS=1 homemgr```
