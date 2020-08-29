@@ -36,4 +36,4 @@ https://aur.archlinux.org/homemgr.git
 Do not forget to do ```homemgr -u USERNAME``` after the upgrade
 
 ### If you are upgrading from version <=1.6 to >=1.7
-Enter ```sudo FIX_ATTRS=1 homemgr```
+Do ```sudo FIX_ATTRS=1 homemgr``` after the upgrade
