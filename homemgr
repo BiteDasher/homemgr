@@ -83,7 +83,6 @@ Usage: homemgr [OPTIONS...] user
 $(echo -e "\e[1m-h --help\e[0m")
 	shows this help
 $(echo -e "\e[1m-c --create USER\e[0m")
-  -c USER
 	creates home directory and configuration file of USER
 $(echo -e "\e[1m-r --remove USER\e[0m")
 	removes home directory and configuration file of USER
