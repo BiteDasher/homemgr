@@ -1,16 +1,6 @@
 #!/bin/bash
 		if [ -z $UID ]; then
 		UID="$(id -u)"; fi
-### This code will be removed soon.
-if [ "$FIX_ATTRS" == 1 ]; then
-	if [ $UID -ne 0 ]; then
-		echo "This script should only be executed as root"
-		exit 2
-	fi
-	chattr -i /home/*/.homedata 2>/dev/null
-	echo "Attributes removed successfully"
-	exit 0
-fi
 check_config() {
 if [ ! -f $1 ]; then echo 0; else
 	source $1
@@ -97,8 +87,10 @@ $(echo -e "\e[1m-c --create USER\e[0m")
 	creates home directory and configuration file of USER
 $(echo -e "\e[1m-r --remove USER\e[0m")
 	removes home directory and configuration file of USER
-$(echo -e "\e[1m-cwu --create-with-user USER uid\e[0m")
-  -cwu USER uid "/path/to/shell" 'password'
+$(echo -e "\e[1m-cwu --create-with-user USER\e[0m")
+  -cwu USER uid
+  -cwu USER - 'password' | (if instead of UID there is a -, then user withh be created with first free UID)
+  -cwu USER uid 'password' "/path/to/shell"
 	creates user with UID uid, home directory and configuration file
 $(echo -e "\e[1m-rwu --remove-with-user USER\e[0m")
 	removes user and its home directory and configuration file
@@ -166,15 +158,24 @@ if [ ! "$2" ]; then
 	echo "Second argument lost"
 	exit 1
 fi
-if [ ! "$3" ]; then
-	echo "Third argument lost"
-	exit 1
+if [[ ! "$3" || "$3" == "-" ]]; then
+	for this_id in {1000..65536}; do
+		if [ "$(getent passwd $this_id)" ]; then
+			continue
+		else
+			USER_ID=$this_id
+			break
+		fi
+	done
+	if [ ! "$USER_ID" ]; then
+	echo "I really don't know why this happened, and I don't even want to know, but it seems that you have all users busy from UID 1000 to 65536"; exit 6; fi
+else USER_ID=$3
 fi
-if [ -n "$(echo $3 | sed "s/[[:digit:]]//g")" ]; then
+if [ -n "$(echo $USER_ID | sed "s/[[:digit:]]//g")" ]; then
 	echo "Invalid UID"
 	exit 5
 fi
-if (($3 < 1000)); then
+if (($USER_ID < 1000)); then
 	echo "UID is lower then 1000"
 	exit 5
 fi
@@ -186,16 +187,16 @@ if [ "$(getent passwd $2)" ]; then
 	echo "User $2 already exists"
 	exit 4
 fi
-if [ "$(getent passwd $3)" ]; then
-	echo "User with UID $3 already exists"
+if [ "$(getent passwd $USER_ID)" ]; then
+	echo "User with UID $USER_ID already exists"
 	exit 4
 fi
-	if [ "$4" ]; then
-		if [ ! -f $4 ]; then
-			echo "shell $4 not exists"
+	if [ "$5" ]; then
+		if [ ! -f $5 ]; then
+			echo "shell $5 not exists"
 			exit 1
 		fi
-		U_SHELL="--shell $4"
+		U_SHELL="--shell $5"
 	else U_SHELL="--shell /bin/bash"; fi
 	if [ ! "$(getent group $2)" ]; then
 		GID_SETUP="--user-group"
@@ -203,8 +204,8 @@ fi
 	if [ -d /etc/skel ]; then
 	SKEL_SETUP="--skel /etc/skel"
 	else SKEL_SETUP=; fi
-	useradd $GID_SETUP --uid $3 $SKEL_SETUP $U_SHELL --create-home $2
-	if [ "$5" ]; then DO_PW_CHANGE=1; PW_VAR="$5"; fi
+	useradd $GID_SETUP --uid $USER_ID $SKEL_SETUP $U_SHELL --create-home $2
+	if [ "$4" ]; then DO_PW_CHANGE=1; PW_VAR="$4"; fi
 	_USERNAME=$2 CONF_NOT_EXISTS=1 DO_SETUP=1 update_config
 	echo "Done."
 	;;
@@ -364,8 +365,8 @@ if [[ "$3" == "-n" || "$3" == "--no-useradd" ]]; then
 			GID_SETUP="--user-group"; else groupadd --gid $H_GID $H_GID_W || { echo "Error occured" ; exit 6 ; }; GID_SETUP="--gid $H_GID_W"; fi
 		else GID_SETUP="--gid $H_GID_W"; fi
 			if [ ! -f $H_SHELL ]; then
-				echo "shell $4 not exists, fallin' back to /bin/sh"
-				U_SHELL="--shell /bin/sh"
+				echo "shell $H_SHELL not exists, fallin' back to /bin/bash"
+				U_SHELL="--shell /bin/bash"
 			else
 				U_SHELL="--shell $H_SHELL"
 			fi
@@ -390,8 +391,8 @@ if [[ "$3" == "-n" || "$3" == "--no-useradd" ]]; then
 				GID_SETUP="--user-group"; else groupadd --gid $H_GID $H_GID_W || { echo "Error occered" ; exit 6 ; }; GID_SETUP="--gid $H_GID_W"; fi
 			else GID_SETUP="--gid $H_GID_W"; fi
 			if [ ! -f $H_SHELL ]; then
-				echo "shell $H_SHELL not exists, fallin' back to /bin/sh"
-				U_SHELL="--shell /bin/sh"
+				echo "shell $H_SHELL not exists, fallin' back to /bin/bash"
+				U_SHELL="--shell /bin/bash"
 			else
 				U_SHELL="--shell $H_SHELL"
 			fi
