@@ -3,10 +3,12 @@
 		UID="$(id -u)"; fi
 check_config() {
 if [ ! -f $1 ]; then echo 0; else
+	chmod 600 $1
 	source $1
 	if [[ "$H_NAME" ]] && [[ "$H_UID" ]] && [[ "$H_GID" ]] && [[ "$H_GID_W" ]] && [[ "$H_SHELL" ]]; then
 		echo 1
 	else echo 0; fi
+	chmod 000 $1
 fi
 }
 import_groups() {
@@ -42,7 +44,7 @@ grep -E -o "^${2}:.*:.*:.*" /etc/group && return 0 || grep -E -o ".*:.*:${2}:.*"
 }; fi
 update_config() {
 if [[ "$CONF_NOT_EXISTS" == 1 ]]; then true; else
-chmod 700 /home/$_USERNAME/.homedata
+chmod 600 /home/$_USERNAME/.homedata
 fi
 temp_UID="$(getent passwd $_USERNAME | cut -d":" -f3)"
 temp_GID="$(getent passwd $_USERNAME | cut -d":" -f4)"
@@ -88,7 +90,7 @@ $(echo -e "\e[1m-r --remove USER\e[0m")
 	removes home directory and configuration file of USER
 $(echo -e "\e[1m-cwu --create-with-user USER\e[0m")
   -cwu USER uid
-  -cwu USER - 'password' | (if instead of UID there is a -, then user withh be created with first free UID)
+  -cwu USER - 'password' | (if instead of UID there is a -, then user will be created with first free UID)
   -cwu USER uid 'password' "/path/to/shell"
 	creates user with UID uid, home directory and configuration file
 $(echo -e "\e[1m-rwu --remove-with-user USER\e[0m")
@@ -143,7 +145,7 @@ if [ ! -d /home/$2 ]; then
 	echo "Home directory of user $2 doesn't exists"
 	exit 4
 fi
-	chmod 700 /home/$2/.homedata
+	chmod 600 /home/$2/.homedata
 	rm /home/$2/.homedata
 	rm -r -f /home/$2
 	echo "Done."
@@ -225,7 +227,7 @@ if [ ! -d /home/$2 ]; then
 	echo "Home directory of user $2 doesn't exists"
 	exit 4
 fi
-	chmod 700 /home/$2/.homedata
+	chmod 600 /home/$2/.homedata
 	rm /home/$2/.homedata
 	rm -r -f /home/$2
 	userdel --force $2 || {
