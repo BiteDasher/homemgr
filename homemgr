@@ -54,6 +54,7 @@ temp_GRS="$(id -n -G $_USERNAME | tr " " "\n" | sed "/$temp_GID_W/ d" | tr "\n" 
 	if [ "$DO_SETUP" == 1 ]; then
 		if [ -d /etc/skel ]; then cp -r /etc/skel/. /home/$_USERNAME/; fi
 		chown -R ${temp_UID}:${temp_GID} /home/$_USERNAME
+		chmod 700 /home/$_USERNAME
 	fi
 cat <<EOF > /home/$_USERNAME/.homedata
 H_NAME=$_USERNAME
